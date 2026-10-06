@@ -1,25 +1,25 @@
 """build_db.py - Build the unified transit consolidation database.
 
-Reads all CSV/Excel files from the 14 transit consolidation case folders
-and funnels them into a single SQLite database.
+Reads CSV and Excel files from the 14 transit consolidation case folders
+and loads them into a single SQLite database.
 
 Tables created:
-  - cases, case_folders         Case metadata & folder mapping
+  - cases, case_folders         Case metadata and folder mapping
   - acs_long, acs_codebook      ACS demographic profiles (long format)
   - acs_wide_dp02..dp05         ACS wide tables (partitioned by profile group)
   - lodes                       LEHD LODES annual employment
   - qwi                         LEHD QWI quarterly workforce indicators
   - ntd_monthly                 NTD monthly ridership/service (long format)
-  - ntd_annual, ntd_info        NTD annual totals & agency info
+  - ntd_annual, ntd_info        NTD annual totals and agency info
   - opexp                       Annual operating expenses
   - annual_financial, annual_financial_info   Detailed financials
-  - panel_annual                Human-written annual panels (from workbooks)
+  - panel_annual                Curated annual panels (from workbooks)
   - panel_annual_export         CSV exports of annual panels
   - panel_monthly_ntd           Monthly panel series
-  - manual_master_panel         All human-written master panels stacked
-  - master_panel                Synthesized panel for ALL 14 cases (2000-2026)
+  - manual_master_panel         Stacked curated master panels
+  - master_panel                Standardized panel for all 14 cases (2000-2026)
   - reporter_type_flags, case_risk_summary, field_definitions, sheet_notes
-  - load_log                    Full audit trail
+  - load_log                    Ingestion log for all files and sheets
 
 Usage:
     python build_db.py path/to/data -o transit.db --force
@@ -209,7 +209,7 @@ log = []
 
 
 def clean_columns(names):
-    """OpExp - General Administration ($) -> opexp_general_administration."""
+    """Normalize column names to lowercase snake_case identifiers."""
     out, seen = [], Counter()
     for n in names:
         if isinstance(n, float) and not pd.isna(n) and n.is_integer():
@@ -249,7 +249,7 @@ def record(src, sheet, table, rows, status):
 
 
 def read_grid(path, sheet):
-    """Read an Excel sheet with header=None and find the true header row."""
+    """Read an Excel sheet without header and detect the header row."""
     raw = pd.read_excel(path, sheet_name=sheet, header=None)
     raw = raw.dropna(how="all").dropna(axis=1, how="all").reset_index(drop=True)
     raw.columns = range(raw.shape[1])
@@ -263,7 +263,7 @@ def read_grid(path, sheet):
 
 
 def melt_ntd_matrix(raw, hdr, metric):
-    """Melt wide monthly columns (timestamps) into normalized long rows."""
+    """Melt wide monthly columns into long rows by metric."""
     header = list(raw.iloc[hdr])
     body = raw.iloc[hdr + 1:].reset_index(drop=True)
     month_pos = [i for i, h in enumerate(header) if as_month(h)]
@@ -330,7 +330,7 @@ def load_acs_files(case_dir, case_id, root):
                     df_slice["source_file"] = rel
                     tables[target_table].append(df_slice)
 
-            record(rel, None, "acs_wide_dp02..05", len(df), "loaded (partitioned into 4 profile tables)")
+            record(rel, None, "acs_wide_dp02..05", len(df), "loaded")
 
 
 def load_lodes_file(case_dir, case_id, root):
@@ -512,7 +512,7 @@ def load_combined_master_panel(case_dir, case_id, root):
     rel = p.relative_to(root).as_posix()
     xl = pd.ExcelFile(p)
 
-    # 1. Panel_Annual -> save into single manual_master_panel (and keep panel_annual alias)
+    # 1. Panel_Annual: write to manual_master_panel and panel_annual
     if "Panel_Annual" in xl.sheet_names:
         raw, hdr = read_grid(p, "Panel_Annual")
         if hdr is not None:
@@ -523,7 +523,7 @@ def load_combined_master_panel(case_dir, case_id, root):
 
             tables["manual_master_panel"].append(df)
             tables["panel_annual"].append(df)
-            record(rel, "Panel_Annual", "manual_master_panel", len(df), "loaded (manual master panel)")
+            record(rel, "Panel_Annual", "manual_master_panel", len(df), "loaded")
 
     # 2. Panel_Monthly_NTD
     if "Panel_Monthly_NTD" in xl.sheet_names:
@@ -598,7 +598,7 @@ def load_root_metadata(root):
 
 
 def write_table_with_pk(con, name, df):
-    """Write table ensuring 'id INTEGER PRIMARY KEY AUTOINCREMENT' is the first column."""
+    """Write DataFrame to SQLite with an autoincrementing 'id' primary key."""
     if "id" in df.columns:
         df = df.rename(columns={"id": "id_orig"})
 
@@ -614,8 +614,8 @@ def write_table_with_pk(con, name, df):
 
 
 def synthesize_master_panel(con):
-    """Generate the standardized master_panel for ALL 14 cases across 2000-2026."""
-    print("\nGenerating master_panel for all 14 cases ...")
+    """Construct standardized master_panel across all 14 cases from 2000 to 2026."""
+    print("\nBuilding master_panel (2000-2026)...")
 
     # Define ACS variable map for demographic indicators
     # (column_name, label_text, stat_type)
@@ -736,7 +736,7 @@ def synthesize_master_panel(con):
     except Exception as e:
         print("Note on manual panel indexing:", e)
 
-    # Build the spine across ALL 14 cases from 2000 to 2026
+    # Construct balanced panel spine for all 14 cases from 2000 to 2026
     panel_records = []
     years = range(2000, 2027)
 
@@ -754,7 +754,7 @@ def synthesize_master_panel(con):
                 "post": 1 if y >= event_year else 0,
             }
 
-            # Check if this case-year exists in manual master panel
+            # Use human-curated values if available for this case-year
             human_rec = manual_panel_rows.get((cid, y))
             if human_rec is not None:
                 rec["is_human_verified"] = 1
@@ -762,7 +762,7 @@ def synthesize_master_panel(con):
                     rec[k] = v
             else:
                 rec["is_human_verified"] = 0
-                # Synthesize from source tables
+                # Impute from source tables
 
                 # 1. NTD Monthly
                 m_info = ntd_m_sums.get((cid, y))
@@ -844,14 +844,14 @@ def synthesize_master_panel(con):
                 rec["acs_pct_nh_white"] = ac.get("acs_pct_nh_white")
                 rec["acs_pct_hispanic"] = ac.get("acs_pct_hispanic")
 
-            # Presence indicator flags
+            # Coverage flags
             rec["has_lodes"] = 1 if rec.get("lodes_jobs_total") is not None else 0
             rec["has_qwi"] = 1 if rec.get("qwi_emp_beg_avg") is not None else 0
             rec["has_acs"] = 1 if rec.get("acs_pop") is not None else 0
             rec["has_opexp"] = 1 if rec.get("opexp_ry_usd") is not None else 0
             rec["has_ntd_monthly"] = 1 if (rec.get("ntd_months_n") or 0) > 0 else 0
 
-            # Backward-compatible column aliases
+            # Column aliases
             rec["jobs_total"] = rec.get("lodes_jobs_total")
             rec["age_29_or_younger"] = rec.get("lodes_age_29minus")
             rec["age_30_to_54"] = rec.get("lodes_age_30_54")
@@ -866,7 +866,7 @@ def synthesize_master_panel(con):
     write_table_with_pk(con, "master_panel", df_panel)
     con.execute("CREATE INDEX idx_master_panel_case_year ON master_panel (case_id, year)")
     con.commit()
-    print(f"  master_panel generated: {len(df_panel):,} rows covering all 14 cases.")
+    print(f"  master_panel generated: {len(df_panel):,} rows.")
 
 
 def main():
@@ -884,10 +884,10 @@ def main():
             sys.exit(f"{out_db} already exists. Use --force to overwrite.")
         out_db.unlink()
 
-    print(f"Building transit database from: {root}")
-    print(f"Target SQLite file: {out_db}\n")
+    print(f"Source data directory: {root}")
+    print(f"Target SQLite database: {out_db}\n")
 
-    # 1. Process 14 case folders
+    # 1. Process case directories
     case_folders_meta = []
     case_definitions = []
 
@@ -917,7 +917,7 @@ def main():
             "folder_name": d.name,
         })
 
-        # Load case data files
+        # Ingest case data files
         load_acs_files(d, cid, root)
         load_lodes_file(d, cid, root)
         load_qwi_file(d, cid, root)
@@ -926,7 +926,7 @@ def main():
         load_annual_financial(d, cid, root)
         load_combined_master_panel(d, cid, root)
 
-    # 2. Process root metadata
+    # 2. Ingest root metadata
     load_root_metadata(root)
 
     # 3. Add case definitions & case folders
@@ -935,10 +935,10 @@ def main():
     if notes:
         tables["sheet_notes"].append(pd.DataFrame(notes))
 
-    # 4. Connect to database and write all stacked tables
+    # 4. Connect to database and write tables
     con = sqlite3.connect(out_db)
 
-    print("Writing tables to SQLite ...")
+    print("Writing tables to SQLite...")
     for name, frames in sorted(tables.items()):
         if not frames:
             continue
@@ -951,16 +951,16 @@ def main():
 
     con.commit()
 
-    # 5. Generate unified master_panel for all 14 cases
+    # 5. Generate master_panel
     synthesize_master_panel(con)
 
-    # 6. Write load_log
+    # 6. Ingest log
     df_log = pd.DataFrame(log)
     write_table_with_pk(con, "load_log", df_log)
     con.commit()
 
     con.close()
-    print(f"\nSuccessfully built {out_db} ({out_db.stat().st_size:,} bytes).")
+    print(f"\nWrote {out_db} ({out_db.stat().st_size:,} bytes).")
 
 
 if __name__ == "__main__":

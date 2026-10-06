@@ -1,9 +1,9 @@
-"""check_coverage.py - does the database hold what was loaded, and does master_panel
-match the tables it copies from?   Nothing is calculated; every check is a comparison.
+"""check_coverage.py - Validate database integrity and compare master_panel against source tables.
 
+Usage:
     python check_coverage.py transit.db [data_dir]
 
-With data_dir, CSV row counts are also compared against the files themselves.
+With data_dir, CSV line counts are also compared against database rows.
 """
 import csv
 import sqlite3
@@ -46,7 +46,7 @@ def main():
     def cols(table):
         return {r[1] for r in con.execute(f'PRAGMA table_info("{table}")')}
 
-    # 1. rows the loader logged vs rows in each table
+    # 1. Row counts in load_log vs table row counts
     rows = []
     for t, n in con.execute("SELECT table_name, SUM(rows) FROM load_log WHERE status='loaded' GROUP BY 1").fetchall():
         try:
@@ -58,12 +58,12 @@ def main():
             rows.append((t, f"logged {n}", f"table has {got}"))
     report("1. load_log row counts vs table row counts", rows)
 
-    # 2. files that were neither loaded nor deliberately skipped
-    report("2. errors and unrecognised files/sheets",
+    # 2. Files and sheets with errors or unrecognized status
+    report("2. Errors and unrecognized files/sheets",
            con.execute("SELECT source_file, source_sheet, status FROM load_log "
                        "WHERE status LIKE 'ERROR%' OR status LIKE 'skipped: unrecognised%'").fetchall())
 
-    # 3. CSV row counts vs the CSV files (only if data_dir given)
+    # 3. CSV line counts vs loaded table rows
     if root:
         rows = []
         for src, n in con.execute("SELECT source_file, rows FROM load_log "
@@ -75,8 +75,8 @@ def main():
                     rows.append((src, f"file has {got}", f"loaded {n}"))
         report("3. CSV files: rows in file vs rows loaded", rows)
 
-    # 4. master_panel keys
-    report("4a. duplicate case/year rows in master_panel (a source table has >1 row per case-year)",
+    # 4. master_panel key constraints and year coverage
+    report("4a. Duplicate case-year records in master_panel",
            con.execute("SELECT case_id, year, COUNT(*) FROM master_panel GROUP BY 1,2 HAVING COUNT(*)>1").fetchall())
     lo, hi = min(PANEL_YEARS), max(PANEL_YEARS)
     rows = []
@@ -85,9 +85,9 @@ def main():
             f"SELECT case_id, CAST(year AS INTEGER), COUNT(*) FROM {t} "
             f"WHERE CAST(year AS INTEGER) NOT BETWEEN {lo} AND {hi} "
             f"   OR case_id NOT IN (SELECT case_id FROM case_folders) GROUP BY 1,2").fetchall()]
-    report(f"4b. source rows that cannot appear in master_panel (year outside {lo}-{hi}, or unknown case)", rows)
+    report(f"4b. Source rows outside {lo}-{hi} or unmatched to a case", rows)
 
-    # 5. every copied value equals its source cell (NULL-safe comparison)
+    # 5. Cell-by-cell comparison between master_panel and source tables
     rows = []
     for table, mapping in (("manual_master_panel", PA_COLUMNS), ("lodes", LODES_COLUMNS)):
         have = cols(table)
@@ -104,8 +104,8 @@ def main():
                 rows.append((table, src, f"{n} cell(s) differ in master_panel.{dst}"))
     report("5. master_panel values vs source tables", rows)
 
-    print(f"\n{problems} problem line(s).")
-    print("Not checked: .xlsx cells are not re-read independently; section 1 compares the loader to itself for those.")
+    print(f"\n{problems} issue(s) found.")
+    print("Note: Excel files (.xlsx) are not re-read independently; section 1 checks load_log against table counts.")
 
 
 if __name__ == "__main__":
