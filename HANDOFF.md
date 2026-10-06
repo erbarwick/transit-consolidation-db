@@ -1,6 +1,6 @@
 # Project Handoff & Maintenance Guide
 
-This guide is for researchers and students taking over the **Transit Consolidation Database (SB1)** project. It explains how to add new consolidation cases, update datasets, rebuild the SQLite database (`transit.db`), and publish updates to the web viewer.
+This guide is for the **Transit Consolidation Database (SB1)** project. It explains how to add new consolidation cases, update datasets, rebuild the SQLite database (`transit.db`), and publish updates to the web viewer.
 
 ---
 
