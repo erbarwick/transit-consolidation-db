@@ -12,7 +12,7 @@ env/
 # Data files & databases (exceed GitHub 100MB limit)
 *.db
 *.db.gz
-!docs/data/transit.db.gz
+!docs/data/**
 *.sqlite
 *.sqlite3
 data.zip

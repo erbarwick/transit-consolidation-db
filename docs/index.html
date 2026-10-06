@@ -1,1264 +1,156 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Transit Consolidation Research Database</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <!-- sql.js WebAssembly -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/sql-wasm.js"></script>
-  <style>
-    :root {
-      --bg: #0d1117;
-      --card-bg: #161b22;
-      --sidebar-bg: #11151c;
-      --header-bg: #161b22;
-      --border: #30363d;
-      --text: #e6edf3;
-      --text-muted: #8b949e;
-      --accent: #2f81f7;
-      --accent-hover: #388bfd;
-      --accent-glow: rgba(47, 129, 247, 0.15);
-      --success: #3fb950;
-      --warning: #d29922;
-      --danger: #f85149;
-      --table-header: #1c2128;
-      --table-row-alt: #161b22;
-      --table-row-hover: #21262d;
-      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      --font-mono: 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: var(--font-sans);
-      background-color: var(--bg);
-      color: var(--text);
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      overflow: hidden;
-      font-size: 14px;
-    }
-
-    /* Header */
-    header {
-      background-color: var(--header-bg);
-      border-bottom: 1px solid var(--border);
-      height: 52px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 16px;
-      flex-shrink: 0;
-      z-index: 10;
-    }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-weight: 600;
-      font-size: 15px;
-      letter-spacing: -0.2px;
-    }
-    .brand-icon {
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
-      background: linear-gradient(135deg, #1f6feb, #238636);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-weight: 700;
-      font-size: 14px;
-    }
-    .header-controls {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      padding: 4px 10px;
-      border-radius: 12px;
-      background-color: #21262d;
-      border: 1px solid var(--border);
-      color: var(--text-muted);
-    }
-    .status-indicator {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background-color: var(--warning);
-    }
-    .status-indicator.ready { background-color: var(--success); }
-    .status-indicator.error { background-color: var(--danger); }
-
-    /* Buttons */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      font-size: 12px;
-      font-weight: 500;
-      border-radius: 6px;
-      cursor: pointer;
-      border: 1px solid var(--border);
-      background-color: #21262d;
-      color: var(--text);
-      transition: all 0.15s ease;
-      text-decoration: none;
-    }
-    .btn:hover {
-      background-color: #30363d;
-      border-color: #8b949e;
-      color: #fff;
-    }
-    .btn-primary {
-      background-color: var(--accent);
-      border-color: rgba(240, 246, 252, 0.1);
-      color: #fff;
-    }
-    .btn-primary:hover {
-      background-color: var(--accent-hover);
-    }
-    .btn-success {
-      background-color: #238636;
-      border-color: rgba(240, 246, 252, 0.1);
-      color: #fff;
-    }
-    .btn-success:hover {
-      background-color: #2ea043;
-    }
-
-    /* Main Layout */
-    .app-body {
-      display: flex;
-      flex: 1;
-      height: calc(100vh - 52px);
-      overflow: hidden;
-    }
-
-    /* Sidebar */
-    aside {
-      width: 290px;
-      background-color: var(--sidebar-bg);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
-    }
-    .sidebar-search {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
-    }
-    .sidebar-search input {
-      width: 100%;
-      background-color: var(--bg);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 6px 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      outline: none;
-    }
-    .sidebar-search input:focus {
-      border-color: var(--accent);
-    }
-    .table-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px 6px;
-    }
-    .table-category-label {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 8px 10px 4px 10px;
-    }
-    .table-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 6px 10px;
-      border-radius: 6px;
-      color: var(--text);
-      cursor: pointer;
-      font-size: 13px;
-      margin-bottom: 1px;
-      transition: background 0.1s;
-    }
-    .table-item:hover {
-      background-color: var(--card-bg);
-    }
-    .table-item.active {
-      background-color: var(--accent-glow);
-      color: var(--accent);
-      font-weight: 500;
-    }
-    .table-badge {
-      font-size: 11px;
-      padding: 1px 6px;
-      border-radius: 10px;
-      background-color: #21262d;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-    }
-    .table-item.active .table-badge {
-      background-color: rgba(47, 129, 247, 0.2);
-      color: var(--accent);
-    }
-
-    /* Content Area */
-    main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      background-color: var(--bg);
-    }
-    .nav-tabs {
-      display: flex;
-      background-color: var(--header-bg);
-      border-bottom: 1px solid var(--border);
-      padding: 0 16px;
-      gap: 4px;
-    }
-    .nav-tab {
-      padding: 10px 14px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-muted);
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      transition: all 0.15s;
-    }
-    .nav-tab:hover {
-      color: var(--text);
-    }
-    .nav-tab.active {
-      color: var(--text);
-      border-bottom-color: #f78166;
-    }
-
-    .tab-content {
-      flex: 1;
-      display: none;
-      flex-direction: column;
-      overflow: hidden;
-      padding: 16px;
-    }
-    .tab-content.active {
-      display: flex;
-    }
-
-    /* Table Toolbar */
-    .toolbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-    }
-    .toolbar-left, .toolbar-right {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .toolbar-title {
-      font-size: 16px;
-      font-weight: 600;
-    }
-    .toolbar-meta {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    .filter-input {
-      background-color: var(--card-bg);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 6px 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      width: 200px;
-      outline: none;
-    }
-    .filter-input:focus { border-color: var(--accent); }
-
-    /* Data Table */
-    .table-container {
-      flex: 1;
-      overflow: auto;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background-color: var(--card-bg);
-    }
-    table.data-grid {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-      text-align: left;
-    }
-    table.data-grid th {
-      background-color: var(--table-header);
-      padding: 8px 12px;
-      font-weight: 600;
-      border-bottom: 1px solid var(--border);
-      border-right: 1px solid rgba(255,255,255,0.05);
-      position: sticky;
-      top: 0;
-      z-index: 2;
-      cursor: pointer;
-      user-select: none;
-      white-space: nowrap;
-    }
-    table.data-grid th:hover {
-      background-color: #262c36;
-    }
-    table.data-grid td {
-      padding: 6px 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      border-right: 1px solid rgba(255,255,255,0.03);
-      white-space: nowrap;
-      font-family: var(--font-mono);
-      font-size: 12px;
-    }
-    table.data-grid tr:nth-child(even) {
-      background-color: var(--table-row-alt);
-    }
-    table.data-grid tr:hover {
-      background-color: var(--table-row-hover);
-    }
-
-    /* Pagination */
-    .pagination-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 0 0 0;
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    .pagination-controls {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    select.select-compact {
-      background-color: var(--card-bg);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 12px;
-      outline: none;
-    }
-
-    /* SQL Console */
-    .sql-pane {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      height: 100%;
-    }
-    .sql-presets {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-    .sql-presets select {
-      flex: 1;
-      background-color: var(--card-bg);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 7px 10px;
-      border-radius: 6px;
-      font-size: 13px;
-      outline: none;
-    }
-    .sql-editor-wrapper {
-      position: relative;
-    }
-    textarea#sqlQuery {
-      width: 100%;
-      height: 130px;
-      background-color: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: #79c0ff;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      padding: 10px;
-      resize: vertical;
-      outline: none;
-      line-height: 1.45;
-    }
-    textarea#sqlQuery:focus {
-      border-color: var(--accent);
-    }
-    .sql-actions {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .sql-metrics {
-      font-size: 12px;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-    }
-
-    /* Modal / Welcome overlay */
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(4px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-    }
-    .modal-card {
-      background-color: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      width: 540px;
-      max-width: 90vw;
-      padding: 24px;
-      box-shadow: 0 16px 36px rgba(0,0,0,0.5);
-    }
-    .modal-title {
-      font-size: 18px;
-      font-weight: 700;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .modal-desc {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-bottom: 20px;
-      line-height: 1.5;
-    }
-    .option-card {
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 14px;
-      margin-bottom: 12px;
-      background-color: var(--bg);
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-    .option-card:hover {
-      border-color: var(--accent);
-      background-color: #111620;
-    }
-    .option-header {
-      font-weight: 600;
-      font-size: 14px;
-      margin-bottom: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .option-tag {
-      font-size: 11px;
-      font-weight: 500;
-      padding: 2px 8px;
-      border-radius: 10px;
-      background-color: #1f6feb22;
-      color: var(--accent);
-    }
-    .option-detail {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    .progress-bar-container {
-      display: none;
-      margin-top: 16px;
-    }
-    .progress-bar {
-      height: 8px;
-      background-color: #21262d;
-      border-radius: 4px;
-      overflow: hidden;
-      margin-bottom: 8px;
-    }
-    .progress-fill {
-      height: 100%;
-      width: 0%;
-      background: linear-gradient(90deg, #1f6feb, #3fb950);
-      transition: width 0.2s ease;
-    }
-    .progress-status {
-      font-size: 12px;
-      color: var(--text-muted);
-      text-align: center;
-      font-family: var(--font-mono);
-    }
-
-    /* Schema tab */
-    .schema-card {
-      background-color: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 16px;
-      overflow: auto;
-    }
-    pre.code-block {
-      background-color: #0d1117;
-      border: 1px solid var(--border);
-      padding: 12px;
-      border-radius: 6px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: #79c0ff;
-      overflow-x: auto;
-      white-space: pre-wrap;
-    }
-  </style>
+    <meta charset="utf-8">
+    <meta name="description" content="sqlite file viewer">
+    <meta name="keywords" content="sqlite,viewer,db,database,online">
+    <meta name="author" content="Juraj Novák">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transit Consolidation Database - SQLite Viewer</title>
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link href="css/select2.min.css" rel="stylesheet">
+    <link href="css/select2-bootstrap-5-theme.min.css" rel="stylesheet">
+    <link href="css/main.css" rel="stylesheet">
+    <link rel="image_src" href="img/icon.png" />
+    <link rel="icon" type="image/png" href="img/icon.png"/>
+    <meta property="og:url" content="https://erbarwick.github.io/transit-consolidation-db/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Transit Consolidation Database - SQLite Viewer">
+    <meta property="og:description" content="In-browser viewer for Transit Consolidation SQLite Database">
 </head>
 <body>
 
-  <!-- Top Header -->
-  <header>
-    <div class="brand">
-      <div class="brand-icon">TC</div>
-      <span>Transit Consolidation Research Database</span>
+<img src="img/icon.png" style="display: none;"/>
+
+<div id="main-container" class="container shadow bg-white">
+    <header id="header" class="row align-items-center p-4">
+        <img src="img/logo.svg" width="54" height="54" class="col-auto p-0" alt="Database logo"/>
+
+        <div class="col">
+            <h4 class="mb-0">Transit Consolidation Database</h4>
+            <p class="mb-0 text-muted small">In-browser SQLite viewer (Inloop)</p>
+        </div>
+
+        <a href="https://github.com/erbarwick/transit-consolidation-db/releases/latest" target="_blank" class="btn btn-sm btn-outline-secondary col-auto me-2 no-propagate">
+            📦 GitHub Releases
+        </a>
+        <a href="https://github.com/erbarwick/transit-consolidation-db" target="_blank" class="btn btn-sm btn-outline-secondary col-auto me-3 no-propagate">
+            Git Repo
+        </a>
+
+        <a href="#" id="resizer" aria-label="Expand/Collapse" class="col-auto text-decoration-none" style="color: #3474A8">
+            <svg id="resizer-expand" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-arrows-angle-expand" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M5.828 10.172a.5.5 0 0 0-.707 0l-4.096 4.096V11.5a.5.5 0 0 0-1 0v3.975a.5.5 0 0 0 .5.5H4.5a.5.5 0 0 0 0-1H1.732l4.096-4.096a.5.5 0 0 0 0-.707m4.344-4.344a.5.5 0 0 0 .707 0l4.096-4.096V4.5a.5.5 0 1 0 1 0V.525a.5.5 0 0 0-.5-.5H11.5a.5.5 0 0 0 0 1h2.768l-4.096 4.096a.5.5 0 0 0 0 .707"/>
+            </svg>
+            <svg id="resizer-collapse" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-arrows-angle-contract collapse" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M.172 15.828a.5.5 0 0 0 .707 0l4.096-4.096V14.5a.5.5 0 1 0 1 0v-3.975a.5.5 0 0 0-.5-.5H1.5a.5.5 0 0 0 0 1h2.768L.172 15.121a.5.5 0 0 0 0 .707M15.828.172a.5.5 0 0 0-.707 0l-4.096 4.096V1.5a.5.5 0 1 0-1 0v3.975a.5.5 0 0 0 .5.5H14.5a.5.5 0 0 0 0-1h-2.768L15.828.879a.5.5 0 0 0 0-.707"/>
+            </svg>
+        </a>
+    </header>
+
+    <div id="compat-error" class="alert alert-danger row rounded-0 d-none" role="alert">
+        Sorry but your browser does not support some of new HTML5 features! Try using latest version of Google Chrome or Firefox.
     </div>
-    <div class="header-controls">
-      <div class="status-badge" id="statusBadge">
-        <span class="status-indicator" id="statusDot"></span>
-        <span id="statusText">Initializing SQLite WASM...</span>
-      </div>
-      <label class="btn btn-primary" style="cursor: pointer;">
-        📂 Open Local .db
-        <input type="file" id="localFileInput" accept=".db,.sqlite,.sqlite3,.gz" style="display: none;">
-      </label>
-      <a href="https://github.com/erbarwick/transit-consolidation-db/releases/latest" target="_blank" class="btn">
-        📦 GitHub Release
-      </a>
-      <a href="https://github.com/erbarwick/transit-consolidation-db" target="_blank" class="btn">
-        Git Repo
-      </a>
+
+    <div class="row text-center p-3 align-items-stretch" id="dropzone" onclick="dropzoneClick(this)">
+        <div class="d-flex border border-info-subtle rounded-1 align-items-center justify-content-center">
+            <div id="drop-text">
+                <b>Drop SQLite database here</b> or click to open file dialog.<br/>
+
+                <div class="nouploadinfo small mb-2 text-secondary">
+                    Runs client-side in browser memory via WebAssembly (sql.js).
+                </div>
+
+                <div class="mt-2">
+                    <button class="btn btn-sm btn-primary no-propagate me-2" onclick="loadRemoteDb('data/transit_core.db')">
+                        ⚡ Load transit_core.db (5.7 MB)
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary no-propagate" onclick="loadRemoteDb('data/transit.db.gz')">
+                        📦 Load transit.db.gz (27 MB)
+                    </button>
+                </div>
+            </div>
+            <div id="drop-loading" class="d-flex align-items-center d-none">
+                <div class="spinner-border me-2" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <b>Processing file...</b>
+            </div>
+        </div>
     </div>
-  </header>
 
-  <!-- App Body -->
-  <div class="app-body">
-    <!-- Sidebar -->
-    <aside>
-      <div class="sidebar-search">
-        <input type="text" id="tableFilterInput" placeholder="Filter tables...">
-      </div>
-      <div class="table-list" id="tableListContainer">
-        <!-- Tables populated dynamically -->
-      </div>
-    </aside>
+    <div id="output-box" class="container-fluid">
+        <div class="input-group">
+            <select id="tables" class="form-select" title="Table"></select>
 
-    <!-- Main Workspace -->
-    <main>
-      <nav class="nav-tabs">
-        <div class="nav-tab active" data-tab="browseTab">Browse Data</div>
-        <div class="nav-tab" data-tab="sqlTab">SQL Console</div>
-        <div class="nav-tab" data-tab="schemaTab">Table Schema</div>
-      </nav>
-
-      <!-- TAB 1: Browse Data -->
-      <div class="tab-content active" id="browseTab">
-        <div class="toolbar">
-          <div class="toolbar-left">
-            <span class="toolbar-title" id="currentTableName">master_panel</span>
-            <span class="toolbar-meta" id="tableRowCount">0 rows</span>
-          </div>
-          <div class="toolbar-right">
-            <input type="text" class="filter-input" id="tableRowSearch" placeholder="Filter rows...">
-            <button class="btn btn-success" id="exportTableCsvBtn">📥 Export CSV</button>
-          </div>
+            <div class="dropdown ms-2">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownMenu1"
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                    Export
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="dropdownMenu1">
+                    <li><a class="dropdown-item" href="#" onclick="exportAllToCsv()">All tables to CSV</a></li>
+                    <li><a class="dropdown-item" href="#" onclick="exportSelectedTableToCsv()">Selected table to CSV</a></li>
+                    <li><a class="dropdown-item" href="#" onclick="exportQueryTableToCsv()">Query table to CSV</a></li>
+                </ul>
+            </div>
         </div>
 
-        <div class="table-container" id="gridContainer">
-          <table class="data-grid" id="mainDataGrid">
-            <thead><tr id="gridHeaderRow"></tr></thead>
-            <tbody id="gridBody"></tbody>
-          </table>
+        <div class="d-flex mt-3 mb-3">
+            <div id="sql-editor" class="form-control form-control-lg col me-2"></div>
+            <button class="btn btn-primary col-auto" id="sql-run" type="submit" onclick="executeSql(this)">Execute</button>
         </div>
 
-        <div class="pagination-bar">
-          <div class="pagination-info" id="paginationInfo">Showing 0 of 0</div>
-          <div class="pagination-controls">
-            <select class="select-compact" id="pageSizeSelect">
-              <option value="50">50 / page</option>
-              <option value="100" selected>100 / page</option>
-              <option value="250">250 / page</option>
-              <option value="500">500 / page</option>
-            </select>
-            <button class="btn" id="prevPageBtn">Prev</button>
-            <span id="pageIndicator" style="margin: 0 4px;">1</span>
-            <button class="btn" id="nextPageBtn">Next</button>
-          </div>
+        <div class="alert alert-danger" id="error" style="display: none"></div>
+        <div class="alert alert-info" id="info" style="display: none"></div>
+
+        <div class="row pb-4">
+            <div class="overflow-x-auto">
+                <table id="data" class="table table-sm table-bordered table-hover table-striped">
+                    <thead>
+                    <tr></tr>
+                    </thead>
+                    <tbody class="table-group-divider"></tbody>
+                </table>
+            </div>
+
         </div>
-      </div>
-
-      <!-- TAB 2: SQL Console -->
-      <div class="tab-content" id="sqlTab">
-        <div class="sql-pane">
-          <div class="sql-presets">
-            <select id="queryPresetSelect">
-              <option value="">-- Choose a research query recipe --</option>
-              <option value="recipe1">1. Master Roster of Consolidation Cases</option>
-              <option value="recipe2">2. Ridership & Expenses Around Event Window</option>
-              <option value="recipe3">3. Compare Human-Curated vs Synthesized Values</option>
-              <option value="recipe4">4. Operating Cost Efficiency (Cost per Trip)</option>
-              <option value="recipe5">5. Monthly Ridership Seasonality (CON-001)</option>
-              <option value="recipe6">6. Demographic Profile of Service Areas</option>
-              <option value="recipe7">7. Data Coverage Audit Across All Cases</option>
-            </select>
-            <button class="btn btn-primary" id="runSqlBtn">▶ Execute Query (Ctrl+Enter)</button>
-            <button class="btn btn-success" id="exportSqlCsvBtn">📥 Export CSV</button>
-          </div>
-
-          <div class="sql-editor-wrapper">
-            <textarea id="sqlQuery" spellcheck="false" placeholder="Enter SQL query... (e.g., SELECT * FROM master_panel LIMIT 25;)"></textarea>
-          </div>
-
-          <div class="sql-actions">
-            <div class="sql-metrics" id="sqlMetrics">Ready to execute.</div>
-          </div>
-
-          <div class="table-container" style="flex: 1;">
-            <table class="data-grid" id="sqlResultsGrid">
-              <thead><tr id="sqlHeaderRow"></tr></thead>
-              <tbody id="sqlBody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- TAB 3: Table Schema -->
-      <div class="tab-content" id="schemaTab">
-        <div class="schema-card">
-          <h3 style="margin-bottom: 12px;" id="schemaTableName">Table Schema</h3>
-          <h4 style="color: var(--text-muted); font-size: 13px; margin-bottom: 8px;">PRAGMA table_info</h4>
-          <div class="table-container" style="max-height: 280px; margin-bottom: 16px;">
-            <table class="data-grid" id="schemaColumnsTable">
-              <thead>
-                <tr><th>cid</th><th>name</th><th>type</th><th>notnull</th><th>dflt_value</th><th>pk</th></tr>
-              </thead>
-              <tbody id="schemaColumnsBody"></tbody>
-            </table>
-          </div>
-          <h4 style="color: var(--text-muted); font-size: 13px; margin-bottom: 8px;">DDL Statement</h4>
-          <pre class="code-block" id="schemaDdl">-- DDL will appear here</pre>
-        </div>
-      </div>
-    </main>
-  </div>
-
-  <!-- Initial Load Overlay Modal -->
-  <div class="modal-overlay" id="loadModal">
-    <div class="modal-card">
-      <div class="modal-title">
-        <span style="font-size: 24px;">🚎</span>
-        <span>Transit Consolidation Database</span>
-      </div>
-      <div class="modal-desc">
-        Query, inspect, and export all 14 transit consolidation cases directly in your web browser via client-side SQLite WebAssembly.
-      </div>
-
-      <!-- Option 1: Load Remote Compressed DB -->
-      <div class="option-card" id="btnLoadRemote">
-        <div class="option-header">
-          <span>⚡ Load Remote Database</span>
-          <span class="option-tag">Recommended</span>
-        </div>
-        <div class="option-detail">
-          Downloads the 27 MB compressed database stream and decompresses directly into browser memory (430 MB uncompressed).
-        </div>
-      </div>
-
-      <!-- Option 2: Open Local File -->
-      <div class="option-card" id="btnTriggerLocal">
-        <div class="option-header">
-          <span>📂 Open Local File</span>
-          <span class="option-tag" style="background:#23863622; color:#3fb950;">Instant (0 MB download)</span>
-        </div>
-        <div class="option-detail">
-          Select your local <code>transit.db</code> or <code>transit.db.gz</code> file from your computer. No data is uploaded anywhere.
-        </div>
-      </div>
-
-      <!-- Progress Section -->
-      <div class="progress-bar-container" id="progressContainer">
-        <div class="progress-bar">
-          <div class="progress-fill" id="progressFill"></div>
-        </div>
-        <div class="progress-status" id="progressStatus">Downloading compressed database stream...</div>
-      </div>
     </div>
-  </div>
+</div>
 
-  <script>
-    // Research SQL Recipes
-    const PRESETS = {
-      recipe1: `SELECT 
-    case_id,
-    case_name,
-    consolidation_date,
-    event_year,
-    predecessor_agencies,
-    successor
-FROM cases
-ORDER BY event_year ASC;`,
-      recipe2: `SELECT 
-    case_id,
-    year,
-    event_time,
-    phase,
-    ntd_upt_cal_all AS annual_ridership,
-    opexp_ry_usd AS operating_expenses_usd,
-    lodes_jobs_total AS regional_jobs
-FROM master_panel
-WHERE event_time BETWEEN -3 AND 3
-ORDER BY case_id, year;`,
-      recipe3: `SELECT 
-    m.case_id,
-    m.year,
-    m.phase,
-    m.ntd_upt_cal_all AS master_ridership,
-    h.ntd_upt_cal_all AS manual_ridership,
-    m.opexp_ry_usd AS master_opexp,
-    h.opexp_ry_usd AS manual_opexp
-FROM master_panel m
-JOIN manual_master_panel h ON h.case_id = m.case_id AND h.year = m.year
-WHERE m.case_id = 'CON-011'
-ORDER BY m.year;`,
-      recipe4: `SELECT 
-    case_id,
-    year,
-    phase,
-    event_time,
-    ROUND(opexp_ry_usd / NULLIF(ntd_upt_cal_all, 0), 2) AS cost_per_trip_usd,
-    ntd_upt_cal_all AS total_trips,
-    opexp_ry_usd AS total_operating_cost
-FROM master_panel
-WHERE ntd_upt_cal_all > 0 AND opexp_ry_usd > 0
-ORDER BY case_id, year;`,
-      recipe5: `SELECT 
-    month,
-    SUM(value) AS monthly_ridership
-FROM ntd_monthly
-WHERE case_id = 'CON-001' AND metric = 'UPT'
-GROUP BY month
-ORDER BY month ASC;`,
-      recipe6: `SELECT 
-    case_id,
-    year,
-    acs_pop AS total_population,
-    acs_med_hh_income AS median_household_income,
-    acs_pct_poverty AS poverty_rate_pct,
-    acs_pct_renter AS renter_pct
-FROM master_panel
-WHERE acs_pop IS NOT NULL
-ORDER BY case_id, year;`,
-      recipe7: `SELECT 
-    case_id,
-    COUNT(CASE WHEN has_ntd_monthly = 1 THEN 1 END) AS years_with_monthly_ntd,
-    COUNT(CASE WHEN has_opexp = 1 THEN 1 END) AS years_with_opexp,
-    COUNT(CASE WHEN has_lodes = 1 THEN 1 END) AS years_with_lodes,
-    COUNT(CASE WHEN has_qwi = 1 THEN 1 END) AS years_with_qwi,
-    COUNT(CASE WHEN has_acs = 1 THEN 1 END) AS years_with_acs,
-    COUNT(CASE WHEN is_human_verified = 1 THEN 1 END) AS human_verified_years,
-    COUNT(*) AS total_panel_years
-FROM master_panel
-GROUP BY case_id
-ORDER BY case_id;`
-    };
+<div id="bottom-bar" class="d-flex position-sticky justify-content-center bottom-0 pb-4 d-none pe-none">
+    <div class="row bg-white border border-dark shadow p-3 rounded-2 pe-auto">
+        <button class="btn btn-outline-secondary btn-sm lh-1 col-auto" id="page-prev" type="submit" onclick="setPage(this, false)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-caret-left-fill" viewBox="0 0 16 16">
+                <path d="m3.86 8.753 5.482 4.796c.646.566 1.658.106 1.658-.753V3.204a1 1 0 0 0-1.659-.753l-5.48 4.796a1 1 0 0 0 0 1.506z"/>
+            </svg>
+        </button>
+        <a href="javascript:void(0)" data-bs-toggle="tooltip" class="text-decoration-none col-auto" onclick="setPage(this)" id="pager"></a>
+        <button class="btn btn-outline-secondary btn-sm lh-1 col-auto" id="page-next" type="submit" onclick="setPage(this, true)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-caret-right-fill" viewBox="0 0 16 16">
+                <path d="m12.14 8.753-5.482 4.796c-.646.566-1.658.106-1.658-.753V3.204a1 1 0 0 1 1.659-.753l5.48 4.796a1 1 0 0 1 0 1.506z"/>
+            </svg>
+        </button>
+    </div>
+</div>
 
-    let SQL = null;
-    let db = null;
-    let currentTable = 'master_panel';
-    let currentPage = 1;
-    let pageSize = 100;
-    let totalRows = 0;
-    let sortColumn = null;
-    let sortAsc = true;
-    let lastQueryResults = null;
+<footer class="col text-center text-secondary py-2 my-1 small" id="footer">
+    <a href="https://yuraj11.github.io" class="text-decoration-none">&copy; 2024 Juraj Novák</a><br>
+    <small>| <a href="https://github.com/inloop/sqlite-viewer" class="text-decoration-none link-opacity-75">Fork me on GitHub</a> |</small>
+</footer>
 
-    // Categories mapping for sidebar
-    const CATEGORIES = {
-      'Master Panels': ['master_panel', 'manual_master_panel', 'panel_annual', 'panel_annual_export', 'panel_monthly_ntd'],
-      'Transit Operations': ['ntd_monthly', 'ntd_annual', 'ntd_info', 'opexp', 'annual_financial', 'annual_financial_info'],
-      'Demographics & Labor': ['lodes', 'qwi', 'acs_wide_dp02', 'acs_wide_dp03', 'acs_wide_dp04', 'acs_wide_dp05', 'acs_long', 'acs_codebook'],
-      'Case Metadata': ['cases', 'case_folders', 'field_definitions', 'reporter_type_flags', 'case_risk_summary', 'sheet_notes', 'load_log']
-    };
+<input type="file" id="dropzone-dialog" style="opacity: 0;display:none">
 
-    // Initialize sql.js engine
-    async function initSql() {
-      try {
-        SQL = await initSqlJs({
-          locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/${file}`
-        });
-        document.getElementById('statusText').textContent = 'WASM Ready. Load Database.';
-      } catch (err) {
-        console.error('Failed to init SQL.js', err);
-        document.getElementById('statusDot').className = 'status-indicator error';
-        document.getElementById('statusText').textContent = 'WASM Initialization Error';
-      }
-    }
-    initSql();
+<script src="js/jquery-3.7.1.min.js"></script>
+<script src="js/filereader.js"></script>
+<script src="js/sql-wasm.js?v=1100"></script>
+<script src="js/select2.min.js?v=4013"></script>
+<script src="js/ace/ace.js?v=1323"></script>
+<script src="js/bootstrap.bundle.min.js?v=532"></script>
+<script src="js/mindmup-editabletable.js"></script>
+<script src="js/jszip.min.js"></script>
+<script src="js/FileSaver.min.js"></script>
+<script src="js/main.js?v=18"></script>
 
-    // Tab Switching
-    document.querySelectorAll('.nav-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        tab.classList.add('active');
-        document.getElementById(tab.dataset.tab).classList.add('active');
-
-        if (tab.dataset.tab === 'schemaTab') {
-          renderSchema();
-        }
-      });
-    });
-
-    // Preset selection
-    document.getElementById('queryPresetSelect').addEventListener('change', (e) => {
-      const key = e.target.value;
-      if (PRESETS[key]) {
-        document.getElementById('sqlQuery').value = PRESETS[key];
-      }
-    });
-
-    // Run SQL Button
-    document.getElementById('runSqlBtn').addEventListener('click', executeSqlQuery);
-    document.getElementById('sqlQuery').addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault();
-        executeSqlQuery();
-      }
-    });
-
-    // Trigger local file open
-    document.getElementById('btnTriggerLocal').addEventListener('click', () => {
-      document.getElementById('localFileInput').click();
-    });
-    document.getElementById('localFileInput').addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      showProgress('Reading local file (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)...');
-      try {
-        const arrayBuf = await file.arrayBuffer();
-        let bytes = new Uint8Array(arrayBuf);
-        // check gzip header
-        if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-          showProgress('Decompressing gzip archive in browser...');
-          const ds = new DecompressionStream('gzip');
-          const decompStream = new Response(new Blob([bytes]).stream().pipeThrough(ds));
-          bytes = new Uint8Array(await decompStream.arrayBuffer());
-        }
-        loadDatabaseBuffer(bytes, file.name);
-      } catch (err) {
-        alert('Error loading file: ' + err.message);
-        hideProgress();
-      }
-    });
-
-    // Load remote database
-    document.getElementById('btnLoadRemote').addEventListener('click', async () => {
-      showProgress('Connecting to remote database stream...');
-      try {
-        const url = './data/transit.db.gz';
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-
-        const contentLength = response.headers.get('content-length');
-        const total = contentLength ? parseInt(contentLength, 10) : 28310000;
-        let loaded = 0;
-
-        const reader = response.body.getReader();
-        const chunks = [];
-        
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          loaded += value.length;
-          const pct = Math.min(99, Math.round((loaded / total) * 100));
-          updateProgress(pct, `Downloading: ${(loaded / 1024 / 1024).toFixed(1)} MB (${pct}%)`);
-        }
-
-        updateProgress(99, 'Decompressing gzip stream into memory...');
-        const combined = new Uint8Array(loaded);
-        let offset = 0;
-        for (const chunk of chunks) {
-          combined.set(chunk, offset);
-          offset += chunk.length;
-        }
-
-        const ds = new DecompressionStream('gzip');
-        const decompStream = new Response(new Blob([combined]).stream().pipeThrough(ds));
-        const finalBuffer = new Uint8Array(await decompStream.arrayBuffer());
-
-        loadDatabaseBuffer(finalBuffer, 'transit.db');
-      } catch (err) {
-        console.error(err);
-        alert('Failed to load remote database: ' + err.message + '\n\nYou can use "Open Local File" to load transit.db directly.');
-        hideProgress();
-      }
-    });
-
-    function showProgress(text) {
-      document.getElementById('progressContainer').style.display = 'block';
-      document.getElementById('progressStatus').textContent = text;
-      document.getElementById('progressFill').style.width = '10%';
-    }
-    function updateProgress(pct, text) {
-      document.getElementById('progressFill').style.width = pct + '%';
-      document.getElementById('progressStatus').textContent = text;
-    }
-    function hideProgress() {
-      document.getElementById('progressContainer').style.display = 'none';
-    }
-
-    // Populate database into SQL.js
-    function loadDatabaseBuffer(bytes, filename) {
-      updateProgress(100, 'Initializing SQLite tables...');
-      setTimeout(() => {
-        try {
-          db = new SQL.Database(bytes);
-          document.getElementById('loadModal').style.display = 'none';
-          document.getElementById('statusDot').className = 'status-indicator ready';
-          document.getElementById('statusText').textContent = `Loaded ${filename} (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`;
-
-          populateSidebar();
-          selectTable('master_panel');
-        } catch (err) {
-          alert('Error initializing SQLite database: ' + err.message);
-          hideProgress();
-        }
-      }, 50);
-    }
-
-    // Populate Sidebar
-    function populateSidebar() {
-      const container = document.getElementById('tableListContainer');
-      container.innerHTML = '';
-
-      const res = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;");
-      if (!res.length) return;
-
-      const allTables = res[0].values.map(r => r[0]);
-      const categorized = new Set();
-
-      for (const [catName, tableNames] of Object.entries(CATEGORIES)) {
-        const existing = tableNames.filter(t => allTables.includes(t));
-        if (existing.length > 0) {
-          const catLabel = document.createElement('div');
-          catLabel.className = 'table-category-label';
-          catLabel.textContent = catName;
-          container.appendChild(catLabel);
-
-          existing.forEach(t => {
-            categorized.add(t);
-            container.appendChild(createTableItem(t));
-          });
-        }
-      }
-
-      // Other tables
-      const others = allTables.filter(t => !categorized.has(t));
-      if (others.length > 0) {
-        const catLabel = document.createElement('div');
-        catLabel.className = 'table-category-label';
-        catLabel.textContent = 'Other Tables';
-        container.appendChild(catLabel);
-        others.forEach(t => container.appendChild(createTableItem(t)));
-      }
-    }
-
-    function createTableItem(name) {
-      let count = 0;
-      try {
-        const countRes = db.exec(`SELECT COUNT(*) FROM "${name}";`);
-        if (countRes.length) count = countRes[0].values[0][0];
-      } catch (e) {}
-
-      const div = document.createElement('div');
-      div.className = 'table-item' + (name === currentTable ? ' active' : '');
-      div.dataset.table = name;
-      div.innerHTML = `
-        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${name}</span>
-        <span class="table-badge">${count.toLocaleString()}</span>
-      `;
-      div.addEventListener('click', () => selectTable(name));
-      return div;
-    }
-
-    // Sidebar filter
-    document.getElementById('tableFilterInput').addEventListener('input', (e) => {
-      const q = e.target.value.toLowerCase();
-      document.querySelectorAll('.table-item').forEach(el => {
-        const matches = el.dataset.table.toLowerCase().includes(q);
-        el.style.display = matches ? 'flex' : 'none';
-      });
-    });
-
-    // Select table
-    function selectTable(name) {
-      currentTable = name;
-      currentPage = 1;
-      sortColumn = null;
-      sortAsc = true;
-      document.querySelectorAll('.table-item').forEach(el => {
-        el.classList.toggle('active', el.dataset.table === name);
-      });
-      document.getElementById('currentTableName').textContent = name;
-      document.getElementById('schemaTableName').textContent = `Table: ${name}`;
-      renderBrowseGrid();
-      if (document.getElementById('schemaTab').classList.contains('active')) {
-        renderSchema();
-      }
-    }
-
-    // Render Browse Grid
-    function renderBrowseGrid() {
-      if (!db) return;
-      const search = document.getElementById('tableRowSearch').value.trim();
-      pageSize = parseInt(document.getElementById('pageSizeSelect').value, 10);
-
-      try {
-        // Count total
-        let countSql = `SELECT COUNT(*) FROM "${currentTable}"`;
-        let whereClause = '';
-        if (search) {
-          // get columns to search
-          const colRes = db.exec(`PRAGMA table_info("${currentTable}");`);
-          if (colRes.length) {
-            const cols = colRes[0].values.map(c => `"${c[1]}" LIKE '%${search.replace(/'/g, "''")}%'`);
-            whereClause = ` WHERE ${cols.join(' OR ')}`;
-          }
-        }
-        const countRes = db.exec(countSql + whereClause);
-        totalRows = countRes.length ? countRes[0].values[0][0] : 0;
-        document.getElementById('tableRowCount').textContent = `${totalRows.toLocaleString()} rows`;
-
-        // Query page
-        let orderClause = '';
-        if (sortColumn) {
-          orderClause = ` ORDER BY "${sortColumn}" ${sortAsc ? 'ASC' : 'DESC'}`;
-        }
-        const offset = (currentPage - 1) * pageSize;
-        const pageSql = `SELECT * FROM "${currentTable}"${whereClause}${orderClause} LIMIT ${pageSize} OFFSET ${offset};`;
-        const res = db.exec(pageSql);
-
-        const thead = document.getElementById('gridHeaderRow');
-        const tbody = document.getElementById('gridBody');
-        thead.innerHTML = '';
-        tbody.innerHTML = '';
-
-        if (!res.length) {
-          thead.innerHTML = '<th>No columns</th>';
-          tbody.innerHTML = '<tr><td style="color: var(--text-muted); text-align: center; padding: 20px;">No rows found.</td></tr>';
-          updatePaginationControls(0, 0);
-          return;
-        }
-
-        const columns = res[0].columns;
-        const rows = res[0].values;
-
-        columns.forEach(col => {
-          const th = document.createElement('th');
-          let sortIndicator = '';
-          if (sortColumn === col) {
-            sortIndicator = sortAsc ? ' ▲' : ' ▼';
-          }
-          th.textContent = col + sortIndicator;
-          th.addEventListener('click', () => {
-            if (sortColumn === col) {
-              sortAsc = !sortAsc;
-            } else {
-              sortColumn = col;
-              sortAsc = true;
-            }
-            renderBrowseGrid();
-          });
-          thead.appendChild(th);
-        });
-
-        rows.forEach(r => {
-          const tr = document.createElement('tr');
-          r.forEach(val => {
-            const td = document.createElement('td');
-            td.textContent = (val === null || val === undefined) ? 'NULL' : val;
-            if (val === null) td.style.color = '#8b949e88';
-            tr.appendChild(td);
-          });
-          tbody.appendChild(tr);
-        });
-
-        updatePaginationControls(offset + 1, Math.min(offset + rows.length, totalRows));
-      } catch (err) {
-        console.error('Error rendering grid:', err);
-      }
-    }
-
-    function updatePaginationControls(start, end) {
-      document.getElementById('paginationInfo').textContent = `Showing ${start.toLocaleString()} - ${end.toLocaleString()} of ${totalRows.toLocaleString()}`;
-      const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
-      document.getElementById('pageIndicator').textContent = `${currentPage} / ${totalPages}`;
-      document.getElementById('prevPageBtn').disabled = (currentPage <= 1);
-      document.getElementById('nextPageBtn').disabled = (currentPage >= totalPages);
-    }
-
-    document.getElementById('prevPageBtn').addEventListener('click', () => {
-      if (currentPage > 1) {
-        currentPage--;
-        renderBrowseGrid();
-      }
-    });
-    document.getElementById('nextPageBtn').addEventListener('click', () => {
-      const totalPages = Math.ceil(totalRows / pageSize);
-      if (currentPage < totalPages) {
-        currentPage++;
-        renderBrowseGrid();
-      }
-    });
-    document.getElementById('pageSizeSelect').addEventListener('change', () => {
-      currentPage = 1;
-      renderBrowseGrid();
-    });
-    document.getElementById('tableRowSearch').addEventListener('input', () => {
-      currentPage = 1;
-      renderBrowseGrid();
-    });
-
-    // Execute SQL
-    function executeSqlQuery() {
-      if (!db) return;
-      const sql = document.getElementById('sqlQuery').value.trim();
-      if (!sql) return;
-
-      const t0 = performance.now();
-      try {
-        const res = db.exec(sql);
-        const elapsed = (performance.now() - t0).toFixed(1);
-
-        const thead = document.getElementById('sqlHeaderRow');
-        const tbody = document.getElementById('sqlBody');
-        thead.innerHTML = '';
-        tbody.innerHTML = '';
-
-        if (!res.length) {
-          document.getElementById('sqlMetrics').textContent = `Query executed in ${elapsed} ms. 0 rows returned.`;
-          lastQueryResults = null;
-          return;
-        }
-
-        const columns = res[0].columns;
-        const rows = res[0].values;
-        lastQueryResults = { columns, rows };
-
-        document.getElementById('sqlMetrics').textContent = `Query executed in ${elapsed} ms. ${rows.length.toLocaleString()} row(s) returned.`;
-
-        columns.forEach(col => {
-          const th = document.createElement('th');
-          th.textContent = col;
-          thead.appendChild(th);
-        });
-
-        rows.forEach(r => {
-          const tr = document.createElement('tr');
-          r.forEach(val => {
-            const td = document.createElement('td');
-            td.textContent = (val === null || val === undefined) ? 'NULL' : val;
-            if (val === null) td.style.color = '#8b949e88';
-            tr.appendChild(td);
-          });
-          tbody.appendChild(tr);
-        });
-      } catch (err) {
-        document.getElementById('sqlMetrics').textContent = `Error: ${err.message}`;
-        lastQueryResults = null;
-      }
-    }
-
-    // Export CSV Helpers
-    function downloadCsv(filename, columns, rows) {
-      let csv = columns.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',') + '\n';
-      rows.forEach(r => {
-        csv += r.map(v => {
-          if (v === null || v === undefined) return '';
-          return `"${String(v).replace(/"/g, '""')}"`;
-        }).join(',') + '\n';
-      });
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    document.getElementById('exportTableCsvBtn').addEventListener('click', () => {
-      if (!db || !currentTable) return;
-      try {
-        const res = db.exec(`SELECT * FROM "${currentTable}";`);
-        if (res.length) {
-          downloadCsv(`${currentTable}.csv`, res[0].columns, res[0].values);
-        }
-      } catch (e) {
-        alert('Export error: ' + e.message);
-      }
-    });
-
-    document.getElementById('exportSqlCsvBtn').addEventListener('click', () => {
-      if (!lastQueryResults) {
-        alert('No query results to export.');
-        return;
-      }
-      downloadCsv('query_results.csv', lastQueryResults.columns, lastQueryResults.rows);
-    });
-
-    // Render Schema
-    function renderSchema() {
-      if (!db || !currentTable) return;
-      try {
-        const colRes = db.exec(`PRAGMA table_info("${currentTable}");`);
-        const tbody = document.getElementById('schemaColumnsBody');
-        tbody.innerHTML = '';
-        if (colRes.length) {
-          colRes[0].values.forEach(r => {
-            const tr = document.createElement('tr');
-            r.forEach(v => {
-              const td = document.createElement('td');
-              td.textContent = v;
-              tr.appendChild(td);
-            });
-            tbody.appendChild(tr);
-          });
-        }
-
-        const ddlRes = db.exec(`SELECT sql FROM sqlite_master WHERE type='table' AND name='${currentTable}';`);
-        if (ddlRes.length && ddlRes[0].values.length) {
-          document.getElementById('schemaDdl').textContent = ddlRes[0].values[0][0] || 'N/A';
-        }
-      } catch (e) {
-        console.error('Schema error:', e);
-      }
-    }
-  </script>
 </body>
 </html>

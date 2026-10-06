@@ -2,7 +2,7 @@
 
 This repository contains the data pipeline, verification tools, and unified SQLite database (`transit.db`) for a 14-case study of US public transit consolidations (2000–2026).
 
-- **In-Browser Web Viewer (GitHub Pages):** [https://erbarwick.github.io/transit-consolidation-db/](https://erbarwick.github.io/transit-consolidation-db/)
+- **Web Viewer (Inloop SQLite Viewer on GitHub Pages):** [https://erbarwick.github.io/transit-consolidation-db/](https://erbarwick.github.io/transit-consolidation-db/)
 - **Pre-built Database Releases:** [GitHub Releases (v1.0.0)](https://github.com/erbarwick/transit-consolidation-db/releases/latest)
 
 ---
