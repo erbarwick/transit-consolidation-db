@@ -12,11 +12,12 @@ env/
 # Data files & databases (exceed GitHub 100MB limit)
 *.db
 *.db.gz
+!docs/data/transit.db.gz
 *.sqlite
 *.sqlite3
 data.zip
 data_extracted/
-data/
+/data/
 
 # OS generated files
 .DS_Store
