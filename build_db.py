@@ -26,8 +26,11 @@ Usage:
 """
 
 import argparse
+import csv
 import datetime as dt
+import gzip
 import re
+import shutil
 import sqlite3
 import sys
 import warnings
@@ -38,7 +41,7 @@ import pandas as pd
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-CASE_INFO = {
+DEFAULT_CASE_INFO = {
     "CON-001": {
         "folder": "South East Vermont Transit (SEVT)",
         "name": "SEVT (Deerfield Valley Transit Association/DVTA + Connecticut River Transit/CRT -> Southeast Vermont Transit)",
@@ -168,6 +171,44 @@ CASE_INFO = {
         "alias": "CAND-008",
     },
 }
+
+def load_case_metadata(root_dir=None, custom_path=None):
+    """Load case metadata from cases_metadata.csv, falling back to DEFAULT_CASE_INFO."""
+    paths_to_check = []
+    if custom_path:
+        paths_to_check.append(Path(custom_path))
+    if root_dir:
+        paths_to_check.append(Path(root_dir) / "cases_metadata.csv")
+    script_dir = Path(__file__).resolve().parent
+    paths_to_check.append(script_dir / "cases_metadata.csv")
+
+    for p in paths_to_check:
+        if p.exists():
+            try:
+                df = pd.read_csv(p)
+                cases = {}
+                for _, r in df.iterrows():
+                    cid = str(r["case_id"]).strip()
+                    cases[cid] = {
+                        "folder": str(r["folder"]).strip(),
+                        "name": str(r["name"]).strip(),
+                        "date": str(r["date"]).strip(),
+                        "year": int(r["year"]),
+                        "predecessors": str(r["predecessors"]).strip(),
+                        "successor": str(r["successor"]).strip(),
+                        "short_name": str(r.get("short_name", "")).strip().lower(),
+                    }
+                    if "alias" in r and pd.notna(r["alias"]) and str(r["alias"]).strip():
+                        cases[cid]["alias"] = str(r["alias"]).strip()
+                if cases:
+                    print(f"Loaded {len(cases)} cases from {p}")
+                    return cases
+            except Exception as e:
+                print(f"Warning: could not parse {p} ({e}), using default metadata.")
+    return DEFAULT_CASE_INFO
+
+# Active case info (populated from CSV or defaults)
+CASE_INFO = DEFAULT_CASE_INFO
 
 # Panel year range
 PANEL_YEARS = range(2000, 2027)
@@ -869,15 +910,51 @@ def synthesize_master_panel(con):
     print(f"  master_panel generated: {len(df_panel):,} rows.")
 
 
+def export_core_db(source_db, target_dir):
+    """Export lightweight core database (without large raw ACS long tables) and gzip archive for web."""
+    out_dir = Path(target_dir)
+    if not out_dir.exists():
+        return
+    core_db = out_dir / "transit_core.db"
+    if core_db.exists():
+        core_db.unlink()
+    con_src = sqlite3.connect(source_db)
+    con_dst = sqlite3.connect(core_db)
+    tables = [r[0] for r in con_src.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('acs_long', 'acs_codebook', 'sqlite_sequence')").fetchall()]
+    for t in tables:
+        df_sql = con_src.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{t}'").fetchone()[0]
+        con_dst.execute(df_sql)
+        rows = con_src.execute(f"SELECT * FROM \"{t}\"").fetchall()
+        if rows:
+            placeholders = ",".join(["?"] * len(rows[0]))
+            con_dst.executemany(f"INSERT INTO \"{t}\" VALUES ({placeholders})", rows)
+    con_dst.commit()
+    con_dst.execute("VACUUM")
+    con_dst.close()
+    con_src.close()
+
+    gz_target = out_dir / "transit.db.gz"
+    with open(source_db, "rb") as f_in:
+        with gzip.open(gz_target, "wb", compresslevel=9) as f_out:
+            shutil.copyfileobj(f_in, f_out)
+    print(f"Updated web assets: {core_db} ({core_db.stat().st_size:,} bytes) and {gz_target} ({gz_target.stat().st_size:,} bytes).")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("data_dir", help="Path to data directory")
     parser.add_argument("-o", "--out", default="transit.db", help="Output SQLite database path")
     parser.add_argument("--force", action="store_true", help="Overwrite output database if it exists")
+    parser.add_argument("--cases-csv", default=None, help="Path to custom cases_metadata.csv")
+    parser.add_argument("--export-docs", default="docs/data", help="Directory to export web database files (or 'none' to skip)")
     args = parser.parse_args()
 
+    global CASE_INFO, FOLDER_TO_CASE
     root = Path(args.data_dir)
     out_db = Path(args.out)
+
+    CASE_INFO = load_case_metadata(root, args.cases_csv)
+    FOLDER_TO_CASE = {info["folder"]: cid for cid, info in CASE_INFO.items()}
 
     if out_db.exists():
         if not args.force:
@@ -961,6 +1038,9 @@ def main():
 
     con.close()
     print(f"\nWrote {out_db} ({out_db.stat().st_size:,} bytes).")
+
+    if args.export_docs and args.export_docs.lower() != "none":
+        export_core_db(out_db, args.export_docs)
 
 
 if __name__ == "__main__":

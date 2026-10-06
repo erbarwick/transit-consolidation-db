@@ -4,6 +4,7 @@ This repository contains the data pipeline, verification tools, and unified SQLi
 
 - **Web Viewer (Inloop SQLite Viewer on GitHub Pages):** [https://erbarwick.github.io/transit-consolidation-db/](https://erbarwick.github.io/transit-consolidation-db/)
 - **Pre-built Database Releases:** [GitHub Releases (v1.0.0)](https://github.com/erbarwick/transit-consolidation-db/releases/latest)
+- **Handoff & Maintenance Guide:** [HANDOFF.md](HANDOFF.md) *(how to add new cases, folder templates, R workflow)*
 
 ---
 
@@ -19,10 +20,14 @@ pip install -r requirements.txt
 
 ## Building the Database
 
-To rebuild `transit.db` from the source data folder:
+To rebuild `transit.db` from source data:
 
 ```bash
+# In Python / Terminal:
 python build_db.py path/to/data -o transit.db --force
+
+# Or in RStudio:
+source("build_db.R")
 ```
 
 ### Pipeline Overview (`build_db.py`)
