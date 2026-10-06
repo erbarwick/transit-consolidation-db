@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Data files & databases (exceed GitHub 100MB limit)
+*.db
+*.sqlite
+*.sqlite3
+data.zip
+data_extracted/
+data/
+
+# OS generated files
+.DS_Store
+Thumbs.db
