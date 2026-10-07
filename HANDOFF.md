@@ -70,12 +70,12 @@ Place raw files into the new case directory matching standard naming conventions
 
 Choose whichever method matches your team's workflow:
 
-#### Method A: In RStudio (Recommended for R users)
+#### Method A: In RStudio (Zero Python Setup for R users)
 Open the project in RStudio and run:
 ```r
 source("build_db.R")
 ```
-*(This automatically runs the pipeline, rebuilds `transit.db`, and executes verification checks).*
+*(This is self-bootstrapping: it automatically creates `.venv` and installs required Python packages if missing, locates the data, rebuilds `transit.db`, and executes verification checks).*
 
 #### Method B: In Terminal
 ```bash
@@ -83,7 +83,9 @@ python build_db.py path/to/data -o transit.db --force
 ```
 
 #### Method C: On GitHub (Zero Local Setup)
-Go to the repository on GitHub -> **Actions** -> **Rebuild Transit Database** -> click **Run workflow**.
+- Runs automatically whenever `cases_metadata.csv` or pipeline code is pushed to `main`.
+- Or manually: go to GitHub -> **Actions** -> **Build Transit Database** -> click **Run workflow**.
+- Automatically attaches updated `transit.db` files to GitHub Releases and saves build artifacts.
 
 ---
 
